@@ -44,24 +44,29 @@ function parseIds(raw: string): string[] {
 export default function PostCompare({ value, onChange, ctx }: FieldProps) {
     const categoryId   = (ctx?.categoryId   as string)   ?? "";
     const categoryPath = (ctx?.categoryPath as string[]) ?? [];
-
-    const currentId = (ctx?.postId as string) ?? "";
+    const currentId    = (ctx?.postId       as string)   ?? "";
 
     const [all, setAll]                 = useState<Product[]>([]);
     const [catProducts, setCatProducts] = useState<Product[]>([]);
     const [loading, setLoading]         = useState(false);
     const [search, setSearch]           = useState("");
     const [selectedIds, setSelectedIds] = useState<string[]>(() => parseIds(value));
-    const [debugLog, setDebugLog]       = useState<string[]>([]);
 
-    const initialised    = useRef(false);
-    const lastCategoryId = useRef("");
+    // true once we have restored the saved value from the DB
+    const valueLoaded    = useRef(false);
+    // tracks the last categoryId we saw AFTER the value was loaded
+    const lastCategoryId = useRef<string | null>(null);
 
-    // Restore from saved value on mount
+    // Restore saved value — fires whenever value changes, but only acts once
+    // on the first non-empty arrival (edit mode: PostForm loads async).
     useEffect(() => {
-        if (initialised.current) return;
-        initialised.current = true;
-        setSelectedIds(parseIds(value));
+        if (valueLoaded.current) return;
+        const ids = parseIds(value);
+        // Accept the first time we get a real value OR an explicit empty array
+        if (value !== "" || ids.length === 0) {
+            valueLoaded.current = true;
+            setSelectedIds(ids);
+        }
     }, [value]);
 
     // Flush helper
@@ -71,15 +76,12 @@ export default function PostCompare({ value, onChange, ctx }: FieldProps) {
 
     // Fetch category products when categoryId changes
     useEffect(() => {
-        const url = `/post?type=product&category=${encodeURIComponent(categoryId)}`;
-        setDebugLog(prev => [...prev.slice(-4), `[effect] categoryId="${categoryId}" url="${url}"`]);
         if (!categoryId) { setCatProducts([]); return; }
         setLoading(true);
-        xFetch(url, { cache: "no-store" })
+        xFetch(`/post?type=product&category=${encodeURIComponent(categoryId)}`, { cache: "no-store" })
             .then((r) => r.json())
             .then((data) => {
                 const posts: any[] = data.posts ?? [];
-                setDebugLog(prev => [...prev.slice(-4), `[fetch ok] posts=${posts.length} url=${url}`]);
                 setCatProducts(
                     posts
                         .filter((p) => String(p._id) !== currentId)
@@ -92,16 +94,19 @@ export default function PostCompare({ value, onChange, ctx }: FieldProps) {
                         }))
                 );
             })
-            .catch((err) => {
-                setDebugLog(prev => [...prev.slice(-4), `[fetch error] ${err}`]);
-                setCatProducts([]);
-            })
+            .catch(() => setCatProducts([]))
             .finally(() => setLoading(false));
     }, [categoryId, categoryPath.join(","), currentId]);
 
-    // Reset selected ids when category changes (after mount)
+    // Reset selected ids only when the user actively switches category
+    // (not on initial load). We only start tracking after the value is loaded.
     useEffect(() => {
-        if (!initialised.current) return;
+        if (!valueLoaded.current) return;
+        if (lastCategoryId.current === null) {
+            // First time we see categoryId after load — just record it, don't reset
+            lastCategoryId.current = categoryId;
+            return;
+        }
         if (lastCategoryId.current !== categoryId) {
             lastCategoryId.current = categoryId;
             setSelectedIds([]);
@@ -150,12 +155,9 @@ export default function PostCompare({ value, onChange, ctx }: FieldProps) {
 
     // Derived lists
     const q = search.trim().toLowerCase();
-
-    // When searching: search across all products
     const searchFiltered = q
         ? all.filter((p) => p.title.toLowerCase().includes(q) || p.slug.toLowerCase().includes(q))
         : null;
-
     const displayList = searchFiltered ?? catProducts;
 
     // Selected product objects (from all known)
@@ -172,10 +174,6 @@ export default function PostCompare({ value, onChange, ctx }: FieldProps) {
             <div className="border rounded-lg p-6 bg-gray-50 text-center">
                 <Icon icon="mdi:information-outline" width="40" height="40" className="mx-auto mb-2 text-gray-300" />
                 <p className="text-sm text-gray-500">Select a product category to load comparable products.</p>
-                {/* DEBUG */}
-                <pre className="mt-2 text-left text-xs bg-gray-100 p-2 rounded overflow-auto">
-                    {`ctx.categoryId="${categoryId}" ctx.postId="${currentId}"\nraw ctx: ${JSON.stringify(ctx)}`}
-                </pre>
             </div>
         );
     }
@@ -183,12 +181,6 @@ export default function PostCompare({ value, onChange, ctx }: FieldProps) {
     // ── Render ──────────────────────────────────────────────────────────────
     return (
         <div className="flex flex-col gap-3">
-
-            {/* DEBUG */}
-            <pre className="text-xs bg-yellow-50 border border-yellow-200 rounded p-2 overflow-auto whitespace-pre-wrap">
-                {`categoryId="${categoryId}" currentId="${currentId}" catProducts=${catProducts.length} loading=${loading}\n`}
-                {debugLog.join("\n")}
-            </pre>
 
             {/* Header */}
             <div className="flex items-center justify-between">

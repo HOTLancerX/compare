@@ -10,7 +10,7 @@ export const PLUGINS: PluginMeta = {
     author: "System",
     path: "https://github.com/HOTLancerX/compare.git",
     icon: "mdi:compare",
-    color: "from-violet-500 to-purple-600",
+    color: "from-violet-300 to-purple-800",
 };
 
 /**
