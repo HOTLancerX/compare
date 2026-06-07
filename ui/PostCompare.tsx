@@ -42,15 +42,20 @@ function parseIds(raw: string): string[] {
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export default function PostCompare({ value, onChange, ctx }: FieldProps) {
-    const categoryId = (ctx?.categoryId as string) ?? "";
-    const currentId  = (ctx?.postId     as string) ?? "";
+    const categoryId   = (ctx?.categoryId   as string)   ?? "";
+    const categoryPath = (ctx?.categoryPath as string[]) ?? [];
 
-    const [all, setAll]           = useState<Product[]>([]);   // all products fetched once
-    const [loading, setLoading]   = useState(false);
-    const [search, setSearch]     = useState("");
+    const currentId = (ctx?.postId as string) ?? "";
+
+    const [all, setAll]                 = useState<Product[]>([]);
+    const [catProducts, setCatProducts] = useState<Product[]>([]);
+    const [loading, setLoading]         = useState(false);
+    const [search, setSearch]           = useState("");
     const [selectedIds, setSelectedIds] = useState<string[]>(() => parseIds(value));
+    const [debugLog, setDebugLog]       = useState<string[]>([]);
 
-    const initialised = useRef(false);
+    const initialised    = useRef(false);
+    const lastCategoryId = useRef("");
 
     // Restore from saved value on mount
     useEffect(() => {
@@ -64,28 +69,69 @@ export default function PostCompare({ value, onChange, ctx }: FieldProps) {
         onChange(JSON.stringify(ids));
     }, [onChange]);
 
-    // Fetch all products once
+    // Fetch category products when categoryId changes
     useEffect(() => {
+        const url = `/post?type=product&category=${encodeURIComponent(categoryId)}`;
+        setDebugLog(prev => [...prev.slice(-4), `[effect] categoryId="${categoryId}" url="${url}"`]);
+        if (!categoryId) { setCatProducts([]); return; }
         setLoading(true);
+        xFetch(url, { cache: "no-store" })
+            .then((r) => r.json())
+            .then((data) => {
+                const posts: any[] = data.posts ?? [];
+                setDebugLog(prev => [...prev.slice(-4), `[fetch ok] posts=${posts.length} url=${url}`]);
+                setCatProducts(
+                    posts
+                        .filter((p) => String(p._id) !== currentId)
+                        .map((p) => ({
+                            id: String(p._id),
+                            title: p.title ?? "",
+                            slug: p.slug ?? "",
+                            category: p.category ? String(p.category) : null,
+                            image: "",
+                        }))
+                );
+            })
+            .catch((err) => {
+                setDebugLog(prev => [...prev.slice(-4), `[fetch error] ${err}`]);
+                setCatProducts([]);
+            })
+            .finally(() => setLoading(false));
+    }, [categoryId, categoryPath.join(","), currentId]);
+
+    // Reset selected ids when category changes (after mount)
+    useEffect(() => {
+        if (!initialised.current) return;
+        if (lastCategoryId.current !== categoryId) {
+            lastCategoryId.current = categoryId;
+            setSelectedIds([]);
+            flush([]);
+        }
+    }, [categoryId, flush]);
+
+    // Fetch all products (for search) — deferred until search is used
+    const [allFetched, setAllFetched] = useState(false);
+    const fetchAll = useCallback(() => {
+        if (allFetched) return;
+        setAllFetched(true);
         xFetch("/post?type=product", { cache: "no-store" })
             .then((r) => r.json())
             .then((data) => {
                 const posts: any[] = data.posts ?? [];
                 setAll(
                     posts
-                        .filter((p) => p._id !== currentId)
+                        .filter((p) => String(p._id) !== currentId)
                         .map((p) => ({
-                            id: p._id,
+                            id: String(p._id),
                             title: p.title ?? "",
                             slug: p.slug ?? "",
                             category: p.category ? String(p.category) : null,
-                            image: "",  // thumbnails not stored on Post — shown as placeholder
+                            image: "",
                         }))
                 );
             })
-            .catch(() => setAll([]))
-            .finally(() => setLoading(false));
-    }, [currentId]);
+            .catch(() => setAll([]));
+    }, [allFetched, currentId]);
 
     // Toggle a product
     const toggle = (id: string) => {
@@ -105,25 +151,44 @@ export default function PostCompare({ value, onChange, ctx }: FieldProps) {
     // Derived lists
     const q = search.trim().toLowerCase();
 
-    // Category products first (excluding current), then others
-    const categoryProducts = all.filter((p) => p.category === categoryId);
-    const otherProducts    = all.filter((p) => p.category !== categoryId);
-
     // When searching: search across all products
     const searchFiltered = q
         ? all.filter((p) => p.title.toLowerCase().includes(q) || p.slug.toLowerCase().includes(q))
         : null;
 
-    const displayList = searchFiltered ?? categoryProducts;
+    const displayList = searchFiltered ?? catProducts;
 
     // Selected product objects (from all known)
+    const knownProducts = [...catProducts, ...all];
+    const seen = new Set<string>();
+    const deduped = knownProducts.filter((p) => { if (seen.has(p.id)) return false; seen.add(p.id); return true; });
     const selectedProducts = selectedIds
-        .map((id) => all.find((p) => p.id === id))
+        .map((id) => deduped.find((p) => p.id === id))
         .filter(Boolean) as Product[];
+
+    // ── No category selected ────────────────────────────────────────────────
+    if (!categoryId) {
+        return (
+            <div className="border rounded-lg p-6 bg-gray-50 text-center">
+                <Icon icon="mdi:information-outline" width="40" height="40" className="mx-auto mb-2 text-gray-300" />
+                <p className="text-sm text-gray-500">Select a product category to load comparable products.</p>
+                {/* DEBUG */}
+                <pre className="mt-2 text-left text-xs bg-gray-100 p-2 rounded overflow-auto">
+                    {`ctx.categoryId="${categoryId}" ctx.postId="${currentId}"\nraw ctx: ${JSON.stringify(ctx)}`}
+                </pre>
+            </div>
+        );
+    }
 
     // ── Render ──────────────────────────────────────────────────────────────
     return (
         <div className="flex flex-col gap-3">
+
+            {/* DEBUG */}
+            <pre className="text-xs bg-yellow-50 border border-yellow-200 rounded p-2 overflow-auto whitespace-pre-wrap">
+                {`categoryId="${categoryId}" currentId="${currentId}" catProducts=${catProducts.length} loading=${loading}\n`}
+                {debugLog.join("\n")}
+            </pre>
 
             {/* Header */}
             <div className="flex items-center justify-between">
@@ -169,7 +234,7 @@ export default function PostCompare({ value, onChange, ctx }: FieldProps) {
                 <input
                     type="text"
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={(e) => { fetchAll(); setSearch(e.target.value); }}
                     placeholder="Search all products…"
                     className="w-full pl-9 pr-4 py-2 rounded-lg border text-sm outline-none transition focus:border-indigo-500"
                 />
@@ -192,7 +257,7 @@ export default function PostCompare({ value, onChange, ctx }: FieldProps) {
                 </div>
             ) : displayList.length === 0 ? (
                 <div className="text-center py-6 text-sm text-gray-400">
-                    {q ? "No products match your search." : !categoryId ? "Select a category to see related products." : "No other products in this category."}
+                    {q ? "No products match your search." : "No other products in this category."}
                 </div>
             ) : (
                 <div className="border rounded-lg overflow-hidden">
@@ -231,10 +296,10 @@ export default function PostCompare({ value, onChange, ctx }: FieldProps) {
             )}
 
             {/* Footer hint */}
-            {!q && categoryProducts.length > 0 && !loading && (
+            {!q && catProducts.length > 0 && !loading && (
                 <p className="text-xs text-gray-400">
-                    Showing {categoryProducts.length} product{categoryProducts.length !== 1 ? "s" : ""} from the same category.
-                    {otherProducts.length > 0 && ` Use search to find products from other categories.`}
+                    Showing {catProducts.length} product{catProducts.length !== 1 ? "s" : ""} from the same category.
+                    {all.length > catProducts.length && ` Use search to find products from other categories.`}
                 </p>
             )}
             {q && searchFiltered !== null && !loading && (
