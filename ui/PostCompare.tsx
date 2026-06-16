@@ -74,7 +74,12 @@ export default function PostCompare({ value, onChange, ctx }: FieldProps) {
         onChange(JSON.stringify(ids));
     }, [onChange]);
 
-    // Fetch category products when categoryId changes
+    // Fetch category products when categoryId changes.
+    // Use a ref for categoryPath to avoid re-running the effect when the
+    // array reference changes on every render (inline join would cause loops).
+    const categoryPathRef = useRef(categoryPath);
+    useEffect(() => { categoryPathRef.current = categoryPath; }, [categoryPath]);
+
     useEffect(() => {
         if (!categoryId) { setCatProducts([]); return; }
         setLoading(true);
@@ -96,7 +101,7 @@ export default function PostCompare({ value, onChange, ctx }: FieldProps) {
             })
             .catch(() => setCatProducts([]))
             .finally(() => setLoading(false));
-    }, [categoryId, categoryPath.join(","), currentId]);
+    }, [categoryId, currentId]);
 
     // Reset selected ids only when the user actively switches category
     // (not on initial load). We only start tracking after the value is loaded.
