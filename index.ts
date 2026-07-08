@@ -1,4 +1,5 @@
 import { addHook, type PluginMeta } from "@/hook";
+import { registerLazyComponent } from "@/hook/pluginHooks";
 import PostCompare from "./ui/PostCompare";
 
 // ─── Plugin metadata ───────────────────────────────────────────────────────────
@@ -18,6 +19,15 @@ export const PLUGINS: PluginMeta = {
  * Called by PluginList.reregisterHooks() after the gate is armed.
  */
 export function register() {
+    // ─── Register the Compare UI component as a lazy slot ────────────────────
+    // ProductClient.tsx calls resolveLazyComponent('compare.Compare') so it
+    // never imports from @/plugin/compare/* directly.
+    registerLazyComponent(
+        'compare.Compare',
+        () => import('./ui/Compare'),
+        PLUGINS.nx
+    );
+
     // ─── Compare field on product post form ─────────────────────────────────
     addHook("post.form", [
         {
