@@ -1,15 +1,17 @@
 /**
- * plugin/compare/lib/serverHooks.ts — Server-only compare data helper.
+ * plugin/compare/lib/serverHooks.ts — Server-only compare data enricher.
  *
- * Exports fetchCompareData() which is called by plugin/product/lib/serverHooks.ts
- * when building pageData for product pages.
+ * Auto-discovered by hook/serverDataHooks.ts via require.context.
+ * Registers a product page enricher that adds compareProducts and
+ * categoryProducts to pageData whenever the compare plugin is installed.
  *
- * NOT registered as a standalone serverDataHook — the product hook merges
- * this data into its own response so there is a single pageData object.
+ * No imports from product plugin. No manual wiring anywhere.
+ * Just drop this file and it works.
  *
  * NEVER import from plugin/compare/index.ts or any client component.
  */
 
+import { registerProductEnricher } from "@/hook/serverDataHooks";
 import connectDB from "@/lib/mongodb";
 import Post from "@/models/post";
 import PostInfo from "@/models/post_info";
@@ -41,8 +43,7 @@ function toCompareProduct(post: any, info: Record<string, string>, productPrefix
         if (v.image)           imgs.push(v.image);
         if (v.gallery?.length) imgs.push(...v.gallery);
     }
-    const defaultImages = parseJson<string[]>(info.images, []);
-    const images = [...new Set([...defaultImages, ...imgs])].filter(Boolean);
+    const images = [...new Set([...parseJson<string[]>(info.images, []), ...imgs])].filter(Boolean);
 
     return {
         id:    String(post._id),
@@ -65,41 +66,28 @@ function toCompareProduct(post: any, info: Record<string, string>, productPrefix
     };
 }
 
-// ─── Main export ──────────────────────────────────────────────────────────────
+// ─── Register product enricher ────────────────────────────────────────────────
 
-export interface ComparePageData {
-    compareProducts:  CompareProduct[];
-    categoryProducts: CompareProduct[];
-}
+registerProductEnricher(async (_pageData, postData) => {
+    const compareIdsRaw: string | undefined = postData?.info?._compare;
+    const compareIds: string[] = compareIdsRaw
+        ? parseJson<string[]>(compareIdsRaw, []).filter(Boolean)
+        : [];
 
-/**
- * Fetch compare products and category products for a product page.
- * Called server-side by product/lib/serverHooks.ts.
- *
- * @param compareIds - product IDs from the _compare field
- * @param categoryId - the product's category ObjectId string (for swap dropdown)
- * @param currentId  - the current product's _id (excluded from category results)
- */
-export async function fetchCompareData(
-    compareIds: string[],
-    categoryId: string | null,
-    currentId:  string
-): Promise<ComparePageData> {
-    if (!compareIds.length) {
-        return { compareProducts: [], categoryProducts: [] };
-    }
+    if (!compareIds.length) return {};
 
     await connectDB();
 
+    const productId  = String(postData?._id ?? "");
+    const categoryId = postData?.category ? String(postData.category) : null;
     const productPrefix = await getProductPrefix();
 
-    // ── Fetch compare products ────────────────────────────────────────────────
     const compareOids = compareIds.flatMap(id => {
         try { return [new mongoose.Types.ObjectId(id)]; } catch { return []; }
     });
 
-    const currentOid = mongoose.Types.ObjectId.isValid(currentId)
-        ? new mongoose.Types.ObjectId(currentId) : null;
+    const currentOid = productId && mongoose.Types.ObjectId.isValid(productId)
+        ? new mongoose.Types.ObjectId(productId) : null;
 
     const [comparePosts, catPosts] = await Promise.all([
         compareOids.length
@@ -108,13 +96,12 @@ export async function fetchCompareData(
         categoryId && currentOid
             ? Post.find({
                 category: new mongoose.Types.ObjectId(categoryId),
-                status: "published",
-                _id: { $ne: currentOid },
+                status:   "published",
+                _id:      { $ne: currentOid },
             }).select("_id title slug").lean() as Promise<any[]>
             : Promise.resolve([]),
     ]);
 
-    // ── Batch-fetch all post infos ────────────────────────────────────────────
     const allIds = [
         ...comparePosts.map((p: any) => p._id),
         ...catPosts.map((p: any) => p._id),
@@ -140,4 +127,4 @@ export async function fetchCompareData(
         .map((p: any) => toCompareProduct(p, infoByPost[String(p._id)] ?? {}, productPrefix));
 
     return { compareProducts, categoryProducts };
-}
+});
