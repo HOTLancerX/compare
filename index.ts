@@ -15,8 +15,9 @@
  * No client-side fetching, no registerCompareComponent, no cross-plugin imports.
  */
 
-import { addHook, type PluginMeta } from "@/hook";
+import { addHook, addBuilderElement, type PluginMeta } from "@/hook";
 import PostCompare from "./ui/PostCompare";
+import compareElement from "./ui/CompareElement";
 
 export const PLUGINS: PluginMeta = {
     nx:          "com.system.compare",
@@ -30,6 +31,9 @@ export const PLUGINS: PluginMeta = {
 };
 
 export function register() {
+    // ─── Register builder element ────────────────────────────────────────────
+    addBuilderElement(compareElement, PLUGINS.nx);
+
     // ─── Compare field on product post form ──────────────────────────────────
     // Admin selects which products to compare against this product.
     // Stored as _compare JSON array in post_info.
