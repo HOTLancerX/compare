@@ -179,7 +179,7 @@ export function ProductDropdown({ selected, options, pinned, currentColumns, onS
                 onClick={() => setOpen(v => !v)}
                 className="flex items-center justify-center gap-1 w-full text-sm font-medium text-gray-800 hover:text-main transition-colors border-b border-gray-300 pb-1"
             >
-                <span className="truncate max-w-[130px] text-center">{selected.title}</span>
+                <span className="truncate max-w-32.5 text-center">{selected.title}</span>
                 <Icon icon="mdi:chevron-down" width="16" height="16" className="shrink-0 text-gray-500" />
             </button>
 
@@ -247,7 +247,7 @@ export function ProductCard({ col, colIdx, columns, categoryProducts, currencySy
         <div className="flex flex-col items-center px-3 py-4 gap-3">
             {colIdx === 0 ? (
                 <div className="flex items-center gap-1 font-semibold text-sm text-gray-800 border-b-2 border-main pb-1 w-full justify-center">
-                    <span className="truncate max-w-[140px] text-center">{col.title}</span>
+                    <span className="truncate max-w-35 text-center">{col.title}</span>
                     <Icon icon="mdi:pin" width="14" height="14" className="text-main shrink-0" />
                 </div>
             ) : (
@@ -287,7 +287,7 @@ export function ProductCard2({ col, colIdx, columns, categoryProducts, currencyS
         <div className="flex flex-col items-center px-2 md:px-4 pt-2 md:pt-4 gap-3">
             {colIdx === 0 ? (
                 <div className="flex items-center gap-1 text-sm font-semibold text-gray-900 border-b-2 border-main pb-1 w-full justify-center">
-                    <span className="truncate max-w-[150px] text-center">{col.title}</span>
+                    <span className="truncate max-w-37.5 text-center">{col.title}</span>
                     <Icon icon="mdi:pin" width="13" height="13" className="text-main shrink-0" />
                 </div>
             ) : (

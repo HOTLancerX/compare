@@ -9,7 +9,7 @@
  *
  * Mobile:
  *   2 products: static 2-col grid.
- *   3+ products: react-slick slider, 2 slides at a time.
+ *   3+ products: embla-carousel slider, 2 slides at a time.
  *
  * Spec rows are grouped under collapsible section headers (box titles).
  * When there are no specifications, only the product header row is shown.
@@ -17,9 +17,7 @@
 
 import Image from 'next/image';
 import { Icon } from '@iconify/react';
-import Slider from 'react-slick';
-import 'slick-carousel/slick/slick.css';
-import 'slick-carousel/slick/slick-theme.css';
+import useEmblaCarousel from 'embla-carousel-react';
 import type { StyleProps } from './CompareTypes';
 import { getFieldValue } from './CompareTypes';
 import { useGridState, ProductCard } from './CompareShared';
@@ -32,6 +30,11 @@ export default function CompareStyle1({
         activeIdx, goPrev, goNext, mobileSlides, total,
     } = useGridState(columns);
 
+    const [emblaRef] = useEmblaCarousel({
+        align: 'start',
+        containScroll: 'trimSnaps',
+    });
+
     const desktopColIndices = isDesktopSlider
         ? [0, activeIdx]
         : columns.map((_, i) => i);
@@ -43,12 +46,6 @@ export default function CompareStyle1({
         if (last?.boxTitle === row.boxTitle) last.rows.push(row);
         else groups.push({ boxTitle: row.boxTitle, rows: [row] });
     }
-
-    const slickSettings = {
-        dots: false, infinite: false, speed: 300,
-        slidesToShow: 2, slidesToScroll: 1,
-        arrows: false, swipeToSlide: true,
-    };
 
     const colTemplate = `200px repeat(${desktopGridCols}, minmax(160px, 1fr))`;
 
@@ -172,49 +169,60 @@ export default function CompareStyle1({
                         ))}
                     </div>
                 ) : (
-                    <div>
-                        <div className="border-b">
-                            <Slider {...slickSettings}>
-                                {mobileSlides.map((col, i) => (
-                                    <div key={col.id}>
-                                        <ProductCard col={col} colIdx={i}
-                                            columns={columns} categoryProducts={categoryProducts}
-                                            currencySymbol={currencySymbol} current={current}
-                                            swapColumn={swapColumn} imageSize="sm" />
+                    <div className="flex border border-gray-200 rounded-lg overflow-hidden">
+                        {/* Static Label Column */}
+                        <div className="w-30 shrink-0 border-r bg-gray-50 flex flex-col">
+                            {/* Header spacer */}
+                            <div className="h-52.5 border-b bg-gray-50" />
+                            {/* Spec groups and rows */}
+                            {groups.map(group => (
+                                <div key={group.boxTitle} className="flex flex-col">
+                                    <div className="px-2 py-2 font-semibold text-gray-700 text-xs bg-gray-100 border-b truncate h-9 flex items-center">
+                                        {group.boxTitle}
                                     </div>
-                                ))}
-                            </Slider>
-                        </div>
-                        {groups.map(group => (
-                            <div key={group.boxTitle}>
-                                <div className="bg-gray-50 border-b border-t px-3 py-2 font-semibold text-gray-700 text-xs flex items-center gap-1">
-                                    <Icon icon="mdi:folder-open" width="13" height="13" className="text-main shrink-0" />
-                                    {group.boxTitle}
-                                </div>
-                                {group.rows.map((row, rowIdx) => (
-                                    <div key={`${row.boxTitle}||${row.fieldTitle}`}
-                                        className={`border-b ${rowIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
-                                        <div className="px-3 py-2 flex items-center gap-1 border-b border-gray-100">
+                                    {group.rows.map(row => (
+                                        <div key={row.fieldTitle} className="px-2 py-2 text-xs font-medium text-gray-500 border-b h-12 flex items-center gap-1">
                                             {row.image && (
                                                 <Image src={row.image} alt={row.fieldTitle}
-                                                    width={20} height={20} className="w-5 h-5 object-contain" />
+                                                    width={14} height={14} className="w-3.5 h-3.5 object-contain shrink-0" />
                                             )}
-                                            <span className="text-xs font-medium text-gray-500">{row.fieldTitle}</span>
+                                            <span className="truncate">{row.fieldTitle}</span>
                                         </div>
-                                        <Slider {...slickSettings}>
-                                            {mobileSlides.map(col => {
-                                                const val = getFieldValue(col, row.boxTitle, row.fieldTitle);
-                                                return (
-                                                    <div key={col.id} className="px-3 py-2 text-xs text-gray-700 text-center">
-                                                        {val === '—' ? <span className="text-gray-300">—</span> : <span>{val}</span>}
-                                                    </div>
-                                                );
-                                            })}
-                                        </Slider>
+                                    ))}
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Embla Slider for Product Columns */}
+                        <div className="overflow-hidden flex-1" ref={emblaRef}>
+                            <div className="flex">
+                                {mobileSlides.map((col, i) => (
+                                    <div key={col.id} className="flex-[0_0_50%] min-w-0 border-r last:border-r-0 flex flex-col bg-white">
+                                        {/* Product Card Header */}
+                                        <div className="h-52.5 border-b flex flex-col justify-between p-1 bg-white">
+                                            <ProductCard col={col} colIdx={i}
+                                                columns={columns} categoryProducts={categoryProducts}
+                                                currencySymbol={currencySymbol} current={current}
+                                                swapColumn={swapColumn} imageSize="sm" />
+                                        </div>
+                                        {/* Spec Values */}
+                                        {groups.map(group => (
+                                            <div key={group.boxTitle} className="flex flex-col">
+                                                <div className="h-9 bg-gray-100 border-b" /> {/* Spacer for group title */}
+                                                {group.rows.map(row => {
+                                                    const val = getFieldValue(col, row.boxTitle, row.fieldTitle);
+                                                    return (
+                                                        <div key={row.fieldTitle} className="px-2 py-2 text-xs text-gray-700 text-center border-b h-12 flex items-center justify-center">
+                                                            {val === '—' ? <span className="text-gray-300">—</span> : <span>{val}</span>}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        ))}
                                     </div>
                                 ))}
                             </div>
-                        ))}
+                        </div>
                     </div>
                 )}
             </div>

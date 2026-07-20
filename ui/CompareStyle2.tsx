@@ -7,14 +7,12 @@
  * Per cell: [icon] [field title] [value] — centered, no box grouping headers.
  *
  * Desktop: ≤4 products all shown; 5+ → pinned + 1 active slot.
- * Mobile: 2 → static grid; 3+ → react-slick slider.
+ * Mobile: 2 → static grid; 3+ → embla-carousel slider.
  */
 
 import Image from 'next/image';
 import { Icon } from '@iconify/react';
-import Slider from 'react-slick';
-import 'slick-carousel/slick/slick.css';
-import 'slick-carousel/slick/slick-theme.css';
+import useEmblaCarousel from 'embla-carousel-react';
 import type { StyleProps } from './CompareTypes';
 import { getFieldValue } from './CompareTypes';
 import { useGridState, ProductCard2 } from './CompareShared';
@@ -27,17 +25,16 @@ export default function CompareStyle2({
         activeIdx, goPrev, goNext, mobileSlides, total,
     } = useGridState(columns);
 
+    const [emblaRef] = useEmblaCarousel({
+        align: 'start',
+        containScroll: 'trimSnaps',
+    });
+
     const desktopColIndices = isDesktopSlider
         ? [0, activeIdx]
         : columns.map((_, i) => i);
 
     const gridCols = `repeat(${desktopGridCols}, minmax(140px, 1fr))`;
-
-    const slickSettings = {
-        dots: false, infinite: false, speed: 300,
-        slidesToShow: 2, slidesToScroll: 1,
-        arrows: false, swipeToSlide: true,
-    };
 
     return (
         <section className="my-10">
@@ -132,43 +129,41 @@ export default function CompareStyle2({
                         ))}
                     </div>
                 ) : (
-                    <div>
-                        <div className="border-b pb-4 mb-2">
-                            <Slider {...slickSettings}>
+                    <div className="border border-gray-200 rounded-lg overflow-hidden">
+                        <div className="overflow-hidden w-full" ref={emblaRef}>
+                            <div className="flex">
                                 {mobileSlides.map((col, i) => (
-                                    <div key={col.id}>
-                                        <ProductCard2 col={col} colIdx={i}
-                                            columns={columns} categoryProducts={categoryProducts}
-                                            currencySymbol={currencySymbol} current={current}
-                                            swapColumn={swapColumn} imageSize="sm" />
+                                    <div key={col.id} className="flex-[0_0_50%] min-w-0 border-r last:border-r-0 flex flex-col bg-white">
+                                        {/* Product Card Header */}
+                                        <div className="border-b pb-4 mb-2 p-2 bg-white">
+                                            <ProductCard2 col={col} colIdx={i}
+                                                columns={columns} categoryProducts={categoryProducts}
+                                                currencySymbol={currencySymbol} current={current}
+                                                swapColumn={swapColumn} imageSize="sm" />
+                                        </div>
+                                        {/* Spec Rows */}
+                                        {fieldMatrix.map((row, rowIdx) => {
+                                            const val = getFieldValue(col, row.boxTitle, row.fieldTitle);
+                                            return (
+                                                <div key={`${row.boxTitle}||${row.fieldTitle}`}
+                                                    className={`flex flex-col items-center text-center p-3 gap-1 border-b last:border-b-0 flex-1 justify-center ${rowIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50/40'}`}>
+                                                    {row.image && (
+                                                        <Image src={row.image} alt={row.fieldTitle}
+                                                            width={24} height={24} className="w-6 h-6 object-contain" />
+                                                    )}
+                                                    <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide leading-tight">
+                                                        {row.fieldTitle}
+                                                    </span>
+                                                    <span className={`text-xs leading-snug ${val === '—' ? 'text-gray-300' : 'text-gray-700'}`}>
+                                                        {val}
+                                                    </span>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 ))}
-                            </Slider>
-                        </div>
-                        {fieldMatrix.map((row, rowIdx) => (
-                            <div key={`${row.boxTitle}||${row.fieldTitle}`}
-                                className={`border-b last:border-b-0 ${rowIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50/40'}`}>
-                                <Slider {...slickSettings}>
-                                    {mobileSlides.map(col => {
-                                        const val = getFieldValue(col, row.boxTitle, row.fieldTitle);
-                                        return (
-                                            <div key={col.id} className="flex flex-col items-center text-center px-3 py-4 gap-1">
-                                                {row.image && (
-                                                    <Image src={row.image} alt={row.fieldTitle}
-                                                        width={24} height={24} className="w-6 h-6 object-contain" />
-                                                )}
-                                                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide leading-tight">
-                                                    {row.fieldTitle}
-                                                </span>
-                                                <span className={`text-xs leading-snug ${val === '—' ? 'text-gray-300' : 'text-gray-700'}`}>
-                                                    {val}
-                                                </span>
-                                            </div>
-                                        );
-                                    })}
-                                </Slider>
                             </div>
-                        ))}
+                        </div>
                     </div>
                 )}
             </div>
