@@ -16,6 +16,7 @@
  */
 
 import { addHook, addBuilderElement, type PluginMeta } from "@/hook";
+import { registerLazyComponent } from "@/hook/pluginHooks";
 import PostCompare from "./ui/PostCompare";
 import compareElement from "./ui/CompareElement";
 
@@ -33,6 +34,13 @@ export const PLUGINS: PluginMeta = {
 export function register() {
     // ─── Register builder element ────────────────────────────────────────────
     addBuilderElement(compareElement, PLUGINS.nx);
+
+    // ─── Register lazy component ─────────────────────────────────────────────
+    registerLazyComponent(
+        "product.Compare",
+        () => import("./ui/Compare"),
+        PLUGINS.nx
+    );
 
     // ─── Compare field on product post form ──────────────────────────────────
     // Admin selects which products to compare against this product.
